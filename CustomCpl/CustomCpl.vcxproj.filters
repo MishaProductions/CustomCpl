@@ -33,7 +33,10 @@
     <ClInclude Include="ClassFactory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ElementProvider.h">
+    <ClInclude Include="CplProvider.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="undoc.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -50,7 +53,7 @@
     <ClCompile Include="ClassFactory.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ElementProvider.cpp">
+    <ClCompile Include="CplProvider.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -66,5 +69,6 @@
   </ItemGroup>
   <ItemGroup>
     <Xml Include="pages.xml" />
+    <Xml Include="mainpage.xml" />
   </ItemGroup>
 </Project>

@@ -4,6 +4,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CustomCpl", "CustomCpl\CustomCpl.vcxproj", "{A4DEED29-FCC9-4CF0-A911-B022D1337546}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454} = {0B7DE49A-33C6-41B1-A9CE-D353031F8454}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectUI", "dui70\DirectUI\DirectUI.vcxproj", "{0B7DE49A-33C6-41B1-A9CE-D353031F8454}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +26,14 @@ Global
 		{A4DEED29-FCC9-4CF0-A911-B022D1337546}.Release|x64.Build.0 = Release|x64
 		{A4DEED29-FCC9-4CF0-A911-B022D1337546}.Release|x86.ActiveCfg = Release|Win32
 		{A4DEED29-FCC9-4CF0-A911-B022D1337546}.Release|x86.Build.0 = Release|Win32
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Debug|x64.ActiveCfg = Debug|x64
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Debug|x64.Build.0 = Debug|x64
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Debug|x86.ActiveCfg = Debug|Win32
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Debug|x86.Build.0 = Debug|Win32
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Release|x64.ActiveCfg = Release|x64
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Release|x64.Build.0 = Release|x64
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Release|x86.ActiveCfg = Release|Win32
+		{0B7DE49A-33C6-41B1-A9CE-D353031F8454}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

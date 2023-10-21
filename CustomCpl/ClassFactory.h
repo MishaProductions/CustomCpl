@@ -1,5 +1,5 @@
 #pragma once
-class ClassFactory
+class ClassFactory : public IClassFactory
 {
 public:
     ClassFactory(REFCLSID rclsid);

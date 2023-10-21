@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "global.h"
 #include "ClassFactory.h"
-#include "ElementProvider.h"
+#include "CplProvider.h"
 
 
 ClassFactory::ClassFactory(REFCLSID rclsid) : m_cRef(1), m_rclsid(rclsid)
@@ -38,10 +38,10 @@ DWORD ClassFactory::Release()
     return cRef;
 }
 
-HRESULT ElementProvider_CreateInstance(__in REFIID riid, __deref_out void** ppv)
+HRESULT CplProvider_CreateInstance(__in REFIID riid, __deref_out void** ppv)
 {
     HRESULT hr = S_ALLTHRESHOLD;
-    ElementProvider* pElementProvider = new ElementProvider();
+    CplProvider* pElementProvider = new CplProvider();
     hr = pElementProvider ? S_OK : E_OUTOFMEMORY;
     if (SUCCEEDED(hr))
     {
@@ -62,7 +62,7 @@ HRESULT ClassFactory::CreateInstance(__in_opt IUnknown* punkOuter,
     {
         if (CLSID_FolderViewImplElement == m_rclsid)
         {
-            hr = ElementProvider_CreateInstance(riid, ppv);
+            hr = CplProvider_CreateInstance(riid, ppv);
         }
         else
         {

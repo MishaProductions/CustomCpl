@@ -146,7 +146,7 @@ load_assembly_and_get_function_pointer_fn get_dotnet_load_assembly(const char_t*
 	void* load_assembly_and_get_function_pointer = nullptr;
 	hostfxr_handle cxt = nullptr;
 	int rc = init_for_config_fptr(config_path, nullptr, &cxt);
-	if (rc != 0 || cxt == nullptr)
+	if (rc != 0 && cxt == nullptr)
 	{
 		std::cerr << "Init failed: " << std::hex << std::showbase << rc << std::endl;
 		close_fptr(cxt);
@@ -249,7 +249,8 @@ HRESULT CplProvider::CreateDUI(DirectUI::IXElementCP* a, HWND* result_handle)
 	{
 		// error
 		HRESULT hr = GetLastError();
-		return S_OK;
+		if (hr != ERROR_CLASS_ALREADY_EXISTS)
+			return S_OK;
 	}
 
 	HWND sink = a->GetNotificationSinkHWND();

@@ -1,0 +1,2 @@
+# CustomCPL
+This project hosts a windows form usercontrol in the control panel. I don't recommend using this as having the .NET clr loaded into the shell is a horrible idea. Make sure to build the customcpl and customcplimpl project and regsvr32 it in an admin cmd prompt. Modify customcplimpl MainPage to customize the content.

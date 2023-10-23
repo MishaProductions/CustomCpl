@@ -170,7 +170,6 @@
 	</stylesheets>
 
 	<element resid="main" layout="borderlayout()" accessible="true" accrole="window" sheet="common">
-		<element id="atom(ErrorText)" layoutpos="top" content="Loading .net runtime"></element>
-		<HWNDHost id="atom(host)" layoutpos="top"/>
+		<element id="atom(ErrorText)" layoutpos="top" content="Failed to initialize .NET runtime!"></element>
 	</element>
 </duixml>

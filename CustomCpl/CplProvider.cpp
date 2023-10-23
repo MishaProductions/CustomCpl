@@ -177,6 +177,7 @@ LRESULT CALLBACK MainWndProc(
 
 HRESULT CplProvider::CreateDUI(DirectUI::IXElementCP* a, HWND* result_handle)
 {	//
+	XProvider::CreateDUI(a, result_handle); //call to avoid crashes upon exit
 	   // STEP 1: Load HostFxr and get exported hosting functions
 	   //
 	if (!load_hostfxr(nullptr))
@@ -233,11 +234,7 @@ HRESULT CplProvider::CreateDUI(DirectUI::IXElementCP* a, HWND* result_handle)
 		return S_OK;
 	}
 
-	
-
-	HWND newHwnd = (HWND)hello();
-	BOOL x = IsWindow(newHwnd);
-	HRESULT hr2 = GetLastError();
+	HWND usercontrolHwnd = (HWND)hello();
 
 	WNDCLASSEXW classinfo = {0};
 	classinfo.cbSize = sizeof(WNDCLASSEXW);
@@ -245,20 +242,26 @@ HRESULT CplProvider::CreateDUI(DirectUI::IXElementCP* a, HWND* result_handle)
 	classinfo.lpszClassName = L"XBabyHost2";
 	classinfo.hbrBackground = (HBRUSH)GetStockObject(COLOR_ACTIVECAPTION);
 	classinfo.lpfnWndProc = MainWndProc;
-	//classinfo.cbClsExtra = 30;
 
 	ATOM classs = RegisterClassExW(&classinfo);
 
 	if (classs == NULL)
 	{
 		// error
-		hr2 = GetLastError();
+		HRESULT hr = GetLastError();
 		return S_OK;
 	}
 
 	HWND sink = a->GetNotificationSinkHWND();
 	HWND registerr = CreateWindowExW(0, L"XBabyHost2", 0, 0x46000000 | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, sink, 0, g_hInst, 0);
-	HWND hr3 = SetParent(newHwnd, registerr);
+	HWND hr3 = SetParent(usercontrolHwnd, registerr);
+
+	// update size of our usercontrol
+	RECT hostRect = {0};
+	GetWindowRect(registerr, &hostRect);
+
+	// todo: properly set size
+	BOOL x = SetWindowPos(usercontrolHwnd, NULL, 0, 0, 20000, 20000, 0);
 	*result_handle = registerr;
 	return 0;
 }

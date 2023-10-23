@@ -1,7 +1,38 @@
 #include "pch.h"
 #include "global.h"
 #include "CplProvider.h"
+#include "hostfxr.h"
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <chrono>
+#include <iostream>
+#include <thread>
+#include <vector>
 
+#include "nethost.h"
+
+// Header files copied from https://github.com/dotnet/core-setup
+#include "coreclr_delegates.h"
+#include "hostfxr.h"
+
+#define STR(s) L ## s
+#define CH(c) L ## c
+#define DIR_SEPARATOR L'\\'
+
+#define string_compare wcscmp
+using string_t = std::basic_string<char_t>;
+
+hostfxr_initialize_for_dotnet_command_line_fn init_for_cmd_line_fptr;
+hostfxr_initialize_for_runtime_config_fn init_for_config_fptr;
+hostfxr_get_runtime_delegate_fn get_delegate_fptr;
+hostfxr_run_app_fn run_app_fptr;
+hostfxr_close_fn close_fptr;
+
+// must match in CustomCPLImpl.Creator
+typedef void* (CORECLR_DELEGATE_CALLTYPE* createpage_ptr)();
 
 #define NOT_IMPLEMENTED MessageBox(NULL, TEXT(__FUNCTION__), TEXT("Non implementented function in CElementProvider"), MB_ICONERROR)
 #define SHOW_ERROR(x) MessageBox(NULL, TEXT(x), TEXT("Error in CElementProvider"), MB_ICONERROR)
@@ -23,6 +54,7 @@ CplProvider::CplProvider() : _punkSite(NULL)
 
 CplProvider::~CplProvider()
 {
+
 	UnInitThread();
 	UnInitProcessPriv((unsigned short*)g_hInst);
 
@@ -52,7 +84,7 @@ HRESULT CplProvider::QueryInterface(REFIID riid, __out void** ppv)
 
 		swprintf_s(szGuid, L"{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}", riid.Data1, riid.Data2, riid.Data3, riid.Data4[0], riid.Data4[1], riid.Data4[2], riid.Data4[3], riid.Data4[4], riid.Data4[5], riid.Data4[6], riid.Data4[7]);
 
-		MessageBox(NULL, szGuid, TEXT("Unknown interface in CplProvider::QueryInterface()"), MB_ICONERROR);
+		//MessageBox(NULL, szGuid, TEXT("Unknown interface in CplProvider::QueryInterface()"), MB_ICONERROR);
 	}
 	return hr;
 }
@@ -71,65 +103,169 @@ ULONG CplProvider::Release()
 	}
 	return cRef;
 }
+void* load_library(const char_t* path)
+{
+	HMODULE h = ::LoadLibraryW(path);
+	assert(h != nullptr);
+	return (void*)h;
+}
+void* get_export(void* h, const char* name)
+{
+	void* f = ::GetProcAddress((HMODULE)h, name);
+	assert(f != nullptr);
+	return f;
+}
+// <SnippetLoadHostFxr>
+  // Using the nethost library, discover the location of hostfxr and get exports
+bool load_hostfxr(const char_t* assembly_path)
+{
+	get_hostfxr_parameters params{ sizeof(get_hostfxr_parameters), assembly_path, nullptr };
+	// Pre-allocate a large buffer for the path to hostfxr
+	char_t buffer[MAX_PATH];
+	size_t buffer_size = sizeof(buffer) / sizeof(char_t);
+	int rc = get_hostfxr_path(buffer, &buffer_size, &params);
+	if (rc != 0)
+		return false;
+
+	// Load hostfxr and get desired exports
+	void* lib = load_library(buffer);
+	init_for_cmd_line_fptr = (hostfxr_initialize_for_dotnet_command_line_fn)get_export(lib, "hostfxr_initialize_for_dotnet_command_line");
+	init_for_config_fptr = (hostfxr_initialize_for_runtime_config_fn)get_export(lib, "hostfxr_initialize_for_runtime_config");
+	get_delegate_fptr = (hostfxr_get_runtime_delegate_fn)get_export(lib, "hostfxr_get_runtime_delegate");
+	run_app_fptr = (hostfxr_run_app_fn)get_export(lib, "hostfxr_run_app");
+	close_fptr = (hostfxr_close_fn)get_export(lib, "hostfxr_close");
+
+	return (init_for_config_fptr && get_delegate_fptr && close_fptr);
+}
+// </SnippetLoadHostFxr>
+ // <SnippetInitialize>
+	// Load and initialize .NET Core and get desired function pointer for scenario
+load_assembly_and_get_function_pointer_fn get_dotnet_load_assembly(const char_t* config_path)
+{
+	// Load .NET Core
+	void* load_assembly_and_get_function_pointer = nullptr;
+	hostfxr_handle cxt = nullptr;
+	int rc = init_for_config_fptr(config_path, nullptr, &cxt);
+	if (rc != 0 || cxt == nullptr)
+	{
+		std::cerr << "Init failed: " << std::hex << std::showbase << rc << std::endl;
+		close_fptr(cxt);
+		return nullptr;
+	}
+
+	// Get the load assembly function pointer
+	rc = get_delegate_fptr(
+		cxt,
+		hdt_load_assembly_and_get_function_pointer,
+		&load_assembly_and_get_function_pointer);
+	if (rc != 0 || load_assembly_and_get_function_pointer == nullptr)
+		std::cerr << "Get delegate failed: " << std::hex << std::showbase << rc << std::endl;
+
+	close_fptr(cxt);
+	return (load_assembly_and_get_function_pointer_fn)load_assembly_and_get_function_pointer;
+}
+// </SnippetInitialize>
+
+LRESULT CALLBACK MainWndProc(
+	HWND hwnd,        // handle to window
+	UINT uMsg,        // message identifier
+	WPARAM wParam,    // first message parameter
+	LPARAM lParam)    // second message parameter
+{
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
 
 HRESULT CplProvider::CreateDUI(DirectUI::IXElementCP* a, HWND* result_handle)
-{
-	int hr = XProvider::CreateDUI(a, result_handle);
-	if (SUCCEEDED(hr))
+{	//
+	   // STEP 1: Load HostFxr and get exported hosting functions
+	   //
+	if (!load_hostfxr(nullptr))
 	{
-		DirectUI::XProvider::SetHandleEnterKey(true);
+		assert(false && "Failure: load_hostfxr()");
+		return EXIT_FAILURE;
 	}
-	else
-	{
-		WCHAR buffer[200];
-		if (hr == 0x800403ED)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: Bad markup.");
-		}
-		else if (hr == 0x800403EF)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: A required property is missing. (are you sure that resid=main exists?)");
-		}
-		else if (hr == 0x800403F1)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: Invaild property value");
-		}
-		else if (hr == 0x8004005A)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: Probaby can't find the UIFILE?");
-		}
-		else if (hr == 0x800403EE)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: Unregistered element");
-		}
-		else if (hr == 0x800403F0)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: Something is not found");
-		}
-		else if (hr == 0x800403F0)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: Something is not found");
-		}
-		else if (hr == E_FAIL)
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: E_FAIL");
-		}
-		else
-		{
-			swprintf(buffer, 200, L"Failed to create DirectUI parser: Error %X", hr);
-		}
 
-		MessageBox(NULL, buffer, TEXT("CElementProvider::CreateDUI failed"), MB_ICONERROR);
-		return hr;
+
+	// Get root path of our dll
+	string_t root_path;
+	wchar_t pBuf[256];
+	size_t len = sizeof(pBuf);
+	int bytes = GetModuleFileNameW(g_hInst, pBuf, 256);
+	string_t root_file = pBuf;
+
+	const size_t last_slash_idx = root_file.rfind('\\');
+	if (std::string::npos != last_slash_idx)
+	{
+		root_path = root_file.substr(0, last_slash_idx);
 	}
+	root_path = root_path + L"\\";
+	//
+	// STEP 2: Initialize and start the .NET Core runtime
+	//
+	const string_t config_path = root_path + STR("CustomCPLImpl.runtimeconfig.json");
+	load_assembly_and_get_function_pointer_fn load_assembly_and_get_function_pointer = nullptr;
+	load_assembly_and_get_function_pointer = get_dotnet_load_assembly(config_path.c_str());
+	if (load_assembly_and_get_function_pointer == nullptr)
+	{
+		return S_OK;
+	}
+
+	//
+   // STEP 3: Load managed assembly and get function pointer to a managed method
+   //
+	const string_t dotnetlib_path = root_path + STR("CustomCPLImpl.dll");
+	const char_t* dotnet_type = STR("CustomCPLImpl.Creator, CustomCPLImpl");
+	const char_t* dotnet_type_method = STR("CreatePage");
+	// <SnippetLoadAndGet>
+	// Function pointer to managed delegate
+	createpage_ptr hello = nullptr;
+	int rc = load_assembly_and_get_function_pointer(
+		dotnetlib_path.c_str(),
+		dotnet_type,
+		dotnet_type_method,
+		STR("CustomCPLImpl.Creator+CreatePageDelegate, CustomCPLImpl") /*delegate_type_name*/,
+		nullptr,
+		(void**)&hello);
+	// </SnippetLoadAndGet>
+
+	if (rc != 0 || hello == nullptr)
+	{
+		return S_OK;
+	}
+
+	
+
+	HWND newHwnd = (HWND)hello();
+	BOOL x = IsWindow(newHwnd);
+	HRESULT hr2 = GetLastError();
+
+	WNDCLASSEXW classinfo = {0};
+	classinfo.cbSize = sizeof(WNDCLASSEXW);
+	classinfo.hInstance = g_hInst;
+	classinfo.lpszClassName = L"XBabyHost2";
+	classinfo.hbrBackground = (HBRUSH)GetStockObject(COLOR_ACTIVECAPTION);
+	classinfo.lpfnWndProc = MainWndProc;
+	//classinfo.cbClsExtra = 30;
+
+	ATOM classs = RegisterClassExW(&classinfo);
+
+	if (classs == NULL)
+	{
+		// error
+		hr2 = GetLastError();
+		return S_OK;
+	}
+
+	HWND sink = a->GetNotificationSinkHWND();
+	HWND registerr = CreateWindowExW(0, L"XBabyHost2", 0, 0x46000000 | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, sink, 0, g_hInst, 0);
+	HWND hr3 = SetParent(newHwnd, registerr);
+	*result_handle = registerr;
 	return 0;
 }
 #pragma warning( push )
 #pragma warning( disable : 4312 ) // disable warning about compiler complaining about casting ID to pointer
 HRESULT STDMETHODCALLTYPE CplProvider::SetResourceID(UINT id)
 {
-	IFrameShellViewClient* client = this;
-
 	WCHAR buffer[264];
 	StringCchCopyW(buffer, 260, L"main");
 
@@ -159,80 +295,15 @@ HRESULT STDMETHODCALLTYPE CplProvider::SetResourceID(UINT id)
 }
 #pragma warning( pop )
 
+
 HRESULT STDMETHODCALLTYPE CplProvider::OptionallyTakeInitialFocus(BOOL* result)
 {
 	*result = 0;
-	Element* root = DirectUI::XProvider::GetRoot();
-	if (root != NULL)
-	{
-		//root->GetClassInfoPtr();
-		//TODO
-	}
 	return 0;
 }
-class EventListener : public IElementListener {
-
-	using handler_t = std::function<void(Element*, Event*)>;
-
-	handler_t f;
-public:
-	EventListener(handler_t f) : f(f) { }
-
-	void OnListenerAttach(Element* elem) override { }
-	void OnListenerDetach(Element* elem) override { }
-	bool OnPropertyChanging(Element* elem, const PropertyInfo* prop, int unk, Value* v1, Value* v2) override {
-		return true;
-	}
-	void OnListenedPropertyChanged(Element* elem, const PropertyInfo* prop, int type, Value* v1, Value* v2) override { }
-	void OnListenedEvent(Element* elem, struct Event* iev) override {
-		f(elem, iev);
-	}
-	void OnListenedInput(Element* elem, struct InputEvent* ev) override { }
-};
-//
-//void CplProvider::InitNavLinks()
-//{
-//	auto links = new CControlPanelNavLinks();
-//
-//	WCHAR buffer[1024];
-//	if (FAILED(LoadStringW(g_hInst, IDS_UPDATE, buffer, 1023)))
-//	{
-//		wcscpy_s(buffer, L"Failed to load localized string");
-//	}
-//	links->AddLinkControlPanel(buffer, L"Rectify11.SettingsCPL", L"pageThemePref", CPNAV_Normal, NULL);
-//	links->AddLinkControlPanel(L"System information", L"Microsoft.System", L"", CPNAV_SeeAlso, NULL);
-//
-//
-//	GUID SID_PerLayoutPropertyBag = {};
-//	HRESULT hr = CLSIDFromString(L"{a46e5c25-c09c-4ca8-9a53-49cf7f865525}", (LPCLSID)&SID_PerLayoutPropertyBag);
-//	if (SUCCEEDED(hr))
-//	{
-//		IPropertyBag* bag = NULL;
-//		int hr = IUnknown_QueryService(_punkSite, SID_PerLayoutPropertyBag, IID_IPropertyBag, (LPVOID*)&bag);
-//		if (SUCCEEDED(hr))
-//		{
-//			if (SUCCEEDED(PSPropertyBag_WriteUnknown(bag, L"ControlPanelNavLinks", links)))
-//			{
-//
-//			}
-//			else {
-//				MessageBox(NULL, TEXT("Failed to write property bag for navigation links"), TEXT("CElementProvider::InitNavLinks"), 0);
-//			}
-//			bag->Release();
-//		}
-//		else {
-//			MessageBox(NULL, TEXT("Failed to get property bag for navigation links"), TEXT("CElementProvider::InitNavLinks"), 0);
-//		}
-//	}
-//	else
-//	{
-//		MessageBox(NULL, TEXT("Failed to parse hardcoded GUID (SID_PerLayoutPropertyBag)"), TEXT("CElementProvider::InitNavLinks"), 0);
-//	}
-//}
 
 HRESULT STDMETHODCALLTYPE CplProvider::LayoutInitialized()
 {
-
 	return S_OK;
 }
 HRESULT STDMETHODCALLTYPE CplProvider::Notify(WORD* param)
@@ -291,6 +362,7 @@ HRESULT STDMETHODCALLTYPE CplProvider::OnNavigateAway() {
 	return 0;
 }
 HRESULT STDMETHODCALLTYPE CplProvider::OnInnerElementDestroyed() {
+	// TODO: unload the CLR
 	return 0;
 }
 

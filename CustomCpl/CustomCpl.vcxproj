@@ -121,7 +121,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>Source.def</ModuleDefinitionFile>
-      <AdditionalDependencies>shlwapi.lib;$(OutDir)Dui\dui70.lib;Propsys.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>shlwapi.lib;$(OutDir)Dui\dui70.lib;Propsys.lib;"C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\6.0.22\runtimes\win-x64\native\nethost.lib";%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -146,10 +146,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="ClassFactory.h" />
+    <ClInclude Include="coreclr_delegates.h" />
     <ClInclude Include="CplProvider.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="global.h" />
     <ClInclude Include="guid.h" />
+    <ClInclude Include="hostfxr.h" />
+    <ClInclude Include="nethost.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="undoc.h" />
